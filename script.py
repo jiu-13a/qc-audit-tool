@@ -128,71 +128,87 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
     if st.button("🚀 开始全量检索判定"):
         if not scope.strip():
-            st.warning("请输入范围。")
+            st.warning("请输入范围后再点击检索。")
         else:
-            # 【核心改变】：将整个代码文件转为文本喂给 AI
-            # 仅选取核心列以节省 Token 并提高精准度
+            # 【全量转换】将代码库转为文本，建议只取核心列以节省 Token
+            # 假设 code.csv 包含列：代码, 名称, 包含项, 不包括项
             code_library_text = df_code.to_string(index=False)
-            exp_context = df_exp.tail(10).to_string(index=False) if not df_exp.empty else "暂无历史经验"
+            
+            # 获取最近的经验参考
+            exp_context = df_exp.tail(5).to_string(index=False) if not df_exp.empty else "无"
 
             prompt = f"""
 你现在是【北京北方启辰认证服务有限公司】的技术评审专家。
-你的任务是：从下方提供的【全量代码库】中检索出与《待评审范围》最匹配的6位小类代码。
+任务：请从下方的【全量代码库】中检索出与《待评审范围》最匹配的 **3 到 5 个** 可能的代码候选。
 
-### 待评审范围：
+### 1. 待评审范围：
 {scope}
 
-### 历史判定参考：
+### 2. 历史判定经验：
 {exp_context}
 
-### 全量代码库（请逐行检索）：
+### 3. 全量代码库：
 {code_library_text}
 
-### 判定要求：
-1. **唯一性**：必须且只能从上方的代码库中选择一个真实存在的代码。
-2. **禁止幻觉**：严禁发明任何不在库中的代码（如 33.02.00 这种）。
-3. **逻辑**：先分析业务属性，再对比包含项与排除项。
-4. **输出格式**：最后一行必须严格遵守“最终代码：XX.XX.XX”的格式。
+### 4. 判定要求：
+- **禁止幻觉**：必须且只能从上方的全量代码库中选择真实存在的代码，不得发明代码。
+- **深度比对**：请仔细核对“包含项”以及“不包括”项，排除不符合要求的代码。
+- **多候选输出**：按匹配程度排序，给出 3 到 5 个候选。
+- **固定提取格式**：为了系统自动匹配人员，请在每个建议后紧跟一行：建议代码：[代码号]
 
-请开始深度分析并给出判定：
+### 5. 输出格式示例：
+1. [代码名称]：匹配理由...
+建议代码：14.01.01
+2. [代码名称]：匹配理由...
+建议代码：17.02.03
 """
-            with st.spinner("DeepSeek 正在全文扫描代码库..."):
+
+            with st.spinner("DeepSeek 正在全文扫描代码库并推理中..."):
                 try:
                     res = client.chat.completions.create(
                         model="deepseek-v4-pro",
-                        messages=[{"role": "system", "content": "你是一个严谨的认证代码判定机器人，只根据提供的知识库回答。"},
-                                  {"role": "user", "content": prompt}],
-                        temperature=0.1,
-                        reasoning_effort="high"
+                        messages=[
+                            {"role": "system", "content": "你是一个极其严谨的认证代码判定专家。"},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1, # 低随机性，保证严谨
+                        reasoning_effort="high",
+                        extra_body={"thinking": {"type": "enabled"}}
                     )
                     ai_ans = res.choices[0].message.content
                     st.session_state.ai_ans = ai_ans
                     
-                    # 提取代码
-                    code_match = re.search(r"最终代码：\s*([0-9.]+)", ai_ans)
-                    if code_match:
-                        st.session_state.detected_code = code_match.group(1).strip('.')
-                    else:
-                        st.session_state.detected_code = ""
+                    # 使用正则提取所有建议的代码
+                    all_codes = re.findall(r"建议代码：\s*([0-9.]+)", ai_ans)
+                    # 去重并清理末尾句号
+                    st.session_state.candidate_codes = list(dict.fromkeys([c.strip('.') for c in all_codes]))
                 except Exception as e:
                     st.error(f"AI 调用失败: {e}")
 
-    if st.session_state.ai_ans:
-        st.info(st.session_state.ai_ans)
+    # --- 结果展示区域 ---
+    if 'ai_ans' in st.session_state and st.session_state.ai_ans:
+        st.info("### 📋 AI 判定建议详情")
+        st.markdown(st.session_state.ai_ans)
+        
+        if 'candidate_codes' in st.session_state and st.session_state.candidate_codes:
+            st.divider()
+            st.subheader("👥 候选代码对应专家名单")
+            
+            # 为每个提取到的代码创建一个展开栏
+            for code in st.session_state.candidate_codes:
+                auditors = get_auditors(code, df_cat)
+                
+                with st.expander(f"📍 代码 {code} 的评审人员配置", expanded=True):
+                    if auditors:
+                        col1, col2, col3 = st.columns(3)
+                        col1.success(f"**QMS 专家**\n\n{auditors['Q']}")
+                        col2.success(f"**EMS 专家**\n\n{auditors['E']}")
+                        col3.success(f"**OHSMS 专家**\n\n{auditors['S']}")
+                    else:
+                        st.warning(f"未能在大类表中找到代码 {code[:2]} 开头的对应专家。")
+else:
+    st.error("无法加载模块二：请检查 GitHub 仓库中是否存在 code.csv 和 category.csv。")
 
-        # 自动显示人员信息
-        if st.session_state.detected_code:
-            st.subheader(f"👤 代码 {st.session_state.detected_code} 对应评审人员")
-            auditors = get_auditors(st.session_state.detected_code, df_cat)
-            if auditors:
-                a1, a2, a3 = st.columns(3)
-                a1.success(f"**QMS 审核员**\n\n{auditors['QMS']}")
-                a2.success(f"**EMS 审核员**\n\n{auditors['EMS']}")
-                a3.success(f"**OHSMS 审核员**\n\n{auditors['OHSMS']}")
-            else:
-                st.warning("未在 category 表中找到对应大类的人员信息。")
-
-    st.divider()
 
     # ==========================================
     # 模块三：结果确认与经验库同步
