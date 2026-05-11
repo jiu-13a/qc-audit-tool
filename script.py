@@ -179,7 +179,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
         else:
             # 提取全表数据和历史经验发送给 AI
             code_library_text = df_code.to_string(index=False)
-            exp_context = df_exp.tail(5).to_string(index=False) if not df_exp.empty else "尚无历史经验"
+            exp_context = df_exp.tail(100).to_string(index=False) if not df_exp.empty else "尚无历史经验"
 
             prompt = f"""
 你现在是【北京北方启辰认证服务有限公司】的首席评审专家。
@@ -199,6 +199,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 - **深度比对**：仔细核对“包含项”以及“不包括”项，排除容易混淆的代码。
 - **多候选输出**：按匹配程度从高到低排序，给出 3 到 5 个候选方案。
 - **固定提取格式**：为了系统自动抓取，请务必在每个建议后另起一行，严格写入：建议代码：[6位代码号]
+- **优先参考经验**：仔细比对《历史判定经验》。如果当前的范围描述与历史记录中的范围高度相似，必须优先采用历史记录中的代码，以确保评审尺度的一致性。
 
 ### 5. 输出格式示例：
 1. [分类名称]：[说明匹配的理由]
