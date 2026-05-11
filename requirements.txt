@@ -2,3 +2,5 @@ streamlit
 pandas
 openai
 PyGithub
+python-docx
+easyocr
