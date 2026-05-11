@@ -126,62 +126,56 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
     st.header("🤖 模块二：范围判定与人员查询")
     scope = st.text_area("输入受审核方的范围描述：", height=100)
 
-    if st.button("🚀 确定代码与人员"):
+    if st.button("🚀 开始全量检索判定"):
         if not scope.strip():
             st.warning("请输入范围。")
         else:
-            # 改进：去掉干扰词，扩大搜索范围
-            clean_scope = scope.replace("生产", "").replace("销售", "").replace("加工", "").replace("制造", "").strip()
-            # 提取前两个主要名词（简单处理：取前4个字和中间段落）
-            search_key = clean_scope[:4] 
-            
-            # 模糊匹配：只要任何一列包含关键词就拉出来
-            mask = df_code.apply(lambda row: row.astype(str).str.contains(search_key).any(), axis=1)
-            candidates_df = df_code[mask].head(50) # 给 AI 更多选项
-            candidates_text = candidates_df.to_string()
+            # 【核心改变】：将整个代码文件转为文本喂给 AI
+            # 仅选取核心列以节省 Token 并提高精准度
+            code_library_text = df_code.to_string(index=False)
+            exp_context = df_exp.tail(10).to_string(index=False) if not df_exp.empty else "暂无历史经验"
 
-            if candidates_df.empty:
-                st.error(f"❌ 在 code.csv 中未找到包含 '{search_key}' 的代码，请手动核对或修改搜索词。")
-                st.session_state.ai_ans = "搜索词未匹配到任何官方代码。"
-            else:
-                # 强化版 Prompt
-                prompt = f"""
-你现在是【北京北方启辰认证服务有限公司】的首席评审专家。
-你的任务是：**必须且只能**从我提供的【候选代码库】中选择最精准的6位小类代码。
+            prompt = f"""
+你现在是【北京北方启辰认证服务有限公司】的技术评审专家。
+你的任务是：从下方提供的【全量代码库】中检索出与《待评审范围》最匹配的6位小类代码。
 
-### 1. 待评审范围：
+### 待评审范围：
 {scope}
 
-### 2. 候选代码库（只准从中选择）：
-{candidates_text}
+### 历史判定参考：
+{exp_context}
 
-### 3. 判定准则：
-- **禁止自行发明代码**：如果候选库中没有任何代码能匹配，请直接回答“未找到匹配代码”。
-- **严格核对排除项**：仔细阅读候选库中的“不包括”内容。
-- **输出要求**：最后一行必须是“最终代码：[代码号]”。
+### 全量代码库（请逐行检索）：
+{code_library_text}
 
-### 4. 输出格式：
-- 分析：...
-- 最终代码：[从候选库中选出的代码]
+### 判定要求：
+1. **唯一性**：必须且只能从上方的代码库中选择一个真实存在的代码。
+2. **禁止幻觉**：严禁发明任何不在库中的代码（如 33.02.00 这种）。
+3. **逻辑**：先分析业务属性，再对比包含项与排除项。
+4. **输出格式**：最后一行必须严格遵守“最终代码：XX.XX.XX”的格式。
+
+请开始深度分析并给出判定：
 """
-
-            with st.spinner("DeepSeek 正在深度推理..."):
+            with st.spinner("DeepSeek 正在全文扫描代码库..."):
                 try:
                     res = client.chat.completions.create(
                         model="deepseek-v4-pro",
-                        messages=[{"role": "user", "content": prompt}],
+                        messages=[{"role": "system", "content": "你是一个严谨的认证代码判定机器人，只根据提供的知识库回答。"},
+                                  {"role": "user", "content": prompt}],
                         temperature=0.1,
-                        reasoning_effort="high",
-                        extra_body={"thinking": {"type": "enabled"}}
+                        reasoning_effort="high"
                     )
-                    st.session_state.ai_ans = res.choices[0].message.content
-
-                    # 提取代码用于人员查询
-                    code_match = re.search(r"最终代码：\s*([0-9.]+)", st.session_state.ai_ans)
+                    ai_ans = res.choices[0].message.content
+                    st.session_state.ai_ans = ai_ans
+                    
+                    # 提取代码
+                    code_match = re.search(r"最终代码：\s*([0-9.]+)", ai_ans)
                     if code_match:
-                        st.session_state.detected_code = code_match.group(1)
+                        st.session_state.detected_code = code_match.group(1).strip('.')
+                    else:
+                        st.session_state.detected_code = ""
                 except Exception as e:
-                    st.session_state.ai_ans = f"AI 调用失败: {e}"
+                    st.error(f"AI 调用失败: {e}")
 
     if st.session_state.ai_ans:
         st.info(st.session_state.ai_ans)
