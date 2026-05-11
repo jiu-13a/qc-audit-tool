@@ -368,10 +368,10 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 你现在是认证机构的【合同评审员】，请根据提供的三份文件内容，严格按照 ZY-27 导则进行核查。
 
 ### 1. 营业执照信息（OCR 提取）：
-{license_info}
+{license_text}
 
 ### 2. 申请书内容：
-{app_text[:3000]} 
+{app_text[:3000]}
 
 ### 3. 管理手册摘要：
 {manual_text[:4000]}
