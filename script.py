@@ -364,7 +364,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
             with st.spinner("AI 正在根据 ZY-27 执行交叉核查..."):
                 # 这里放入您要求的 4 个核查要点提示词
-                prompt = f"""
+                prompt_check = f"""
 你现在是认证机构的【合同评审员】，请根据提供的三份文件内容，严格按照 ZY-27 导则进行核查。
 
 ### 1. 营业执照信息（OCR 提取）：
