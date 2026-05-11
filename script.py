@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import re
 from openai import OpenAI
+from github import Github
 
 # ==========================================
 # 1. 基础配置与初始化
@@ -83,6 +84,36 @@ def get_auditors(code_str, df_cat):
         }
     except Exception:
         return None
+def sync_to_github(new_scope, new_code):
+    """通过 GitHub API 将新经验实时推送到仓库"""
+    try:
+        # 从 Secrets 读取 GitHub 配置
+        token = st.secrets["github_token"]
+        repo_name = st.secrets["github_repo"]
+        file_path = "experience.csv"
+        
+        g = Github(token)
+        repo = g.get_repo(repo_name)
+        
+        # 1. 获取 GitHub 仓库中该文件的当前内容
+        file_content = repo.get_contents(file_path)
+        old_data_raw = file_content.decoded_content.decode('utf-8-sig')
+        
+        # 2. 准备新行数据 (清理掉 scope 里的换行和逗号防止 CSV 格式错乱)
+        clean_scope = str(new_scope).replace(',', '，').replace('\n', ' ')
+        new_line = f"\n{clean_scope},{new_code}"
+        
+        # 3. 合并内容并提交回 GitHub
+        updated_content = old_data_raw.strip() + new_line
+        repo.update_file(
+            path=file_path,
+            message=f"System: 自动同步新经验 - {new_code}",
+            content=updated_content,
+            sha=file_content.sha
+        )
+        return True, "同步成功"
+    except Exception as e:
+        return False, str(e)
 
 # ==========================================
 # 3. 文件检查与加载
@@ -235,11 +266,18 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
         elif not scope.strip():
             st.error("存入经验库前请确保上方已填写审核范围。")
         else:
-            # 仅保存范围和代码，剔除人日信息
-            new_log = pd.DataFrame([[scope.replace('\n', ' '), final_code_input]], columns=["范围", "代码"])
-            new_log.to_csv(EXP_FILE, mode='a', header=False, index=False, encoding='utf-8-sig')
-            st.success(f"范围与代码 [{final_code_input}] 已存入经验库！系统已完成学习。")
-            st.balloons()
+            with st.spinner("正在通过 GitHub API 跨云同步数据..."):
+                # --- 核心更改开始 ---
+                success, msg = sync_to_github(scope, final_code_input)
+                
+                if success:
+                    st.success(f"范围与代码 [{final_code_input}] 已永久同步至 GitHub 经验库！")
+                    st.balloons()
+                    st.info("提示：GitHub 仓库已更新，Streamlit 可能会在 1 分钟内自动重新加载以读取新数据。")
+                else:
+                    st.error(f"同步失败: {msg}")
+                    st.warning("请检查 Secrets 中是否配置了正确的 github_token 和 github_repo。")
+                # --- 核心更改结束 ---
 
 else:
     st.error("⚠️ 核心文件缺失：请确保项目根目录下包含 `code.csv`, `calculate.csv`, `category.csv` 三个文件。")
