@@ -173,15 +173,32 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
     st.header("🤖 模块二：范围判定与专家匹配")
     scope = st.text_area("输入受审核方的范围描述：", height=120, placeholder="例如：电子元器件的生产、加工及销售...")
 
-    if st.button("🚀 开始 AI 判定"):
+    if st.button("🚀 开始判定"):
         if not scope.strip():
-            st.warning("请输入审核范围后再点击判定。")
+            st.warning("请输入审核范围。")
         else:
-            # 提取全表数据和历史经验发送给 AI
-            code_library_text = df_code.to_string(index=False)
-            exp_context = df_exp.tail(100).to_string(index=False) if not df_exp.empty else "尚无历史经验"
+            # --- 步骤 1：精确匹配拦截逻辑 ---
+            # 预处理输入范围：去除首尾空格、去除换行符，统一对比标准
+            clean_input = scope.strip().replace('\n', ' ')
+            
+            # 在经验库 df_exp 中查找（假设列名为 '范围' 和 '代码'）
+            # 我们取最后一条匹配记录（代表最近的判定）
+            exact_match = df_exp[df_exp['范围'].str.strip().replace('\n', ' ') == clean_input]
 
-            prompt = f"""
+            if not exact_match.empty:
+                # 情况 A：命中完全对应的经验，直接输出结果，不调用 AI
+                matched_code = str(exact_match.iloc[-1]['代码']).strip()
+                st.session_state.ai_ans = f"✅ **系统提示：** 在经验库中找到与当前描述【完全一致】的历史记录。已自动采用历史判定结果，未消耗 AI 额度。"
+                st.session_state.candidate_codes = [matched_code]
+                st.success("检测到完全匹配的既往经验，已直接提取。")
+            else:
+                # 情况 B：无完全对应经验，AI 介入进行模糊检索和逻辑判断
+                with st.spinner("未发现完全一致的经验，正在启动 AI 结合代码库进行综合判定..."):
+                    # 提取最近的 20 条相关经验作为 AI 的参考
+                    exp_context = df_exp.tail(20).to_string(index=False) if not df_exp.empty else "尚无历史经验"
+                    code_library_text = df_code.to_string(index=False)
+
+                    prompt = f"""
 你现在是【北京北方启辰认证服务有限公司】的首席评审专家。
 任务：请从下方的【全量代码库】中检索出与《待评审范围》最匹配的 **3 到 5 个** 可能的代码候选。
 
