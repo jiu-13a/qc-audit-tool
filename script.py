@@ -242,7 +242,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
                     st.session_state.ai_ans = ai_ans
                     
                     # 正则提取所有建议的代码
-                    all_codes = re.findall(r"建议代码：\s*([0-9.]+)", ai_ans)
+                    all_codes = re.findall(r"(?:建议代码|匹配代码)[:：]\s*\[?([0-9.]+)\]?", ai_ans)
                     # 去重清理
                     st.session_state.candidate_codes = list(dict.fromkeys([c.strip('.') for c in all_codes]))
                 except Exception as e:
