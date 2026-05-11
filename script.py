@@ -199,7 +199,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
                     code_library_text = df_code.to_string(index=False)
 
                     prompt = f"""
-你现在是【北京北方启辰认证服务有限公司】的首席评审专家。
+你是一位精通管理体系认证机构认证业务范围分类指南的专业认证技术专家。你的唯一任务是根据用户提供的“认证业务范围描述”，检索代码库并匹配最准确的“专业代码”。
 任务：请从下方的【全量代码库】中检索出与《待评审范围》最匹配的 **3 到 5 个** 可能的代码候选。
 
 ### 1. 待评审范围：
@@ -219,10 +219,12 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 - **优先参考经验**：仔细比对《历史判定经验》。如果当前的范围描述与历史记录中的范围高度相似，必须优先采用历史记录中的代码，以确保评审尺度的一致性。
 
 ### 5. 输出格式示例：
-1. [分类名称]：[说明匹配的理由]
-建议代码：14.01.01
-2. [分类名称]：[说明匹配的理由]
-建议代码：17.02.03
+匹配代码： [例如：19.02.00]
+分类名称： [例如：计算机及其外部设备的制造]
+依据说明： [简述为什么选择该代码，例如：根据产品最终用途属于计算机硬件配套。]
+
+### 6. 特殊指令：
+如果一个范围可能对应多个代码，请全部列出并简要说明区别。
 """
             with st.spinner("DeepSeek 正在扫描代码库并深度推理..."):
                 try:
@@ -270,32 +272,59 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
     st.divider()
 
     # ==========================================
-    # 模块三：结果确认与入库
+    # 模块三：批量录入与同步经验库
     # ==========================================
-    st.header("💾 模块三：同步至经验库")
-    
-    # 默认填入 AI 建议的第一个代码（如果有的话）
-    default_code = st.session_state.candidate_codes[0] if st.session_state.candidate_codes else ""
-    final_code_input = st.text_input("确认并输入最终采用的代码：", value=default_code, placeholder="例如: 29.01.01")
-    
-    if st.button("✅ 确认并学习"):
-        if not final_code_input:
-            st.error("存入经验库前请先输入代码。")
-        elif not scope.strip():
-            st.error("存入经验库前请确保上方已填写审核范围。")
+    st.divider()
+    st.header("💾 模块三：批量手动录入经验库")
+    st.info("💡 此模块为独立功能，支持一次性录入三组经验。仅填写完整（范围+代码）的行会被提交。")
+
+    # 创建表头
+    h_col1, h_col2 = st.columns([3, 1])
+    h_col1.markdown("**受审核方范围**")
+    h_col2.markdown("**审核代码**")
+
+    # 定义数据列表，用于存放输入
+    batch_data = []
+
+    # 循环生成 3 组输入框
+    for i in range(3):
+        r_col1, r_col2 = st.columns([3, 1])
+        with r_col1:
+            input_scope = st.text_input(f"范围 {i+1}", label_visibility="collapsed", key=f"manual_scope_{i}", placeholder=f"请输入第 {i+1} 组范围描述...")
+        with r_col2:
+            input_code = st.text_input(f"代码 {i+1}", label_visibility="collapsed", key=f"manual_code_{i}", placeholder="例如: 29.01.01")
+        
+        # 只要范围和代码都不为空，就加入待提交列表
+        if input_scope.strip() and input_code.strip():
+            batch_data.append({"scope": input_scope.strip(), "code": input_code.strip()})
+
+    # 提交按钮
+    if st.button("🚀 批量确认并同步至 GitHub", type="primary"):
+        if not batch_data:
+            st.warning("⚠️ 请至少完整填写一组“范围”和“代码”后再提交。")
         else:
-            with st.spinner("正在通过 GitHub API 跨云同步数据..."):
-                # --- 核心更改开始 ---
-                success, msg = sync_to_github(scope, final_code_input)
-                
-                if success:
-                    st.success(f"范围与代码 [{final_code_input}] 已永久同步至 GitHub 经验库！")
+            success_count = 0
+            fail_logs = []
+            
+            with st.spinner(f"正在同步 {len(batch_data)} 条数据至 GitHub..."):
+                for item in batch_data:
+                    success, msg = sync_to_github(item["scope"], item["code"])
+                    if success:
+                        success_count += 1
+                    else:
+                        fail_logs.append(f"代码 {item['code']} 同步失败: {msg}")
+            
+            # 结果反馈
+            if success_count > 0:
+                st.success(f"✅ 成功同步 {success_count} 条新经验！")
+                if success_count == len(batch_data):
                     st.balloons()
-                    st.info("提示：GitHub 仓库已更新，Streamlit 可能会在 1 分钟内自动重新加载以读取新数据。")
-                else:
-                    st.error(f"同步失败: {msg}")
-                    st.warning("请检查 Secrets 中是否配置了正确的 github_token 和 github_repo。")
-                # --- 核心更改结束 ---
+            
+            if fail_logs:
+                for err in fail_logs:
+                    st.error(err)
+            
+            st.info("提示：GitHub 仓库已更新，数据生效可能有延迟（约 1 分钟）。")
 
 else:
     st.error("⚠️ 核心文件缺失：请确保项目根目录下包含 `code.csv`, `calculate.csv`, `category.csv` 三个文件。")
