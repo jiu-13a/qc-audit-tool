@@ -194,8 +194,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
             else:
                 # 情况 B：无完全对应经验，AI 介入进行模糊检索和逻辑判断
                 with st.spinner("未发现完全一致的经验，正在启动 AI 结合代码库进行综合判定..."):
-                    # 提取最近的 20 条相关经验作为 AI 的参考
-                    exp_context = df_exp.tail(20).to_string(index=False) if not df_exp.empty else "尚无历史经验"
+                    # 提取最近的 100 条相关经验作为 AI 的参考
+                    exp_context = df_exp.tail(100).to_string(index=False) if not df_exp.empty else "尚无历史经验"
                     code_library_text = df_code.to_string(index=False)
 
                     prompt = f"""
@@ -253,21 +253,21 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
         st.info("### 💡 AI 判定建议详情")
         st.markdown(st.session_state.ai_ans)
         
-        if st.session_state.candidate_codes:
-            st.divider()
-            st.subheader("👥 候选代码对应专家名单")
+    if st.session_state.candidate_codes:
+        st.divider()
+        st.subheader("👥 候选代码对应专家名单")
             
-            for code in st.session_state.candidate_codes:
-                auditors = get_auditors(code, df_cat)
-                # 使用折叠面板美观展示多个人员组合
-                with st.expander(f"📍 候选代码 {code} 的评审人员配置", expanded=True):
-                    if auditors:
-                        a1, a2, a3 = st.columns(3)
-                        a1.success(f"**QMS 专家**\n\n{auditors['Q']}")
-                        a2.success(f"**EMS 专家**\n\n{auditors['E']}")
-                        a3.success(f"**OHSMS 专家**\n\n{auditors['S']}")
-                    else:
-                        st.warning(f"未能在大类表中找到代码 {code[:2]} 开头的对应专家，请检查 category.csv。")
+        for code in st.session_state.candidate_codes:
+            auditors = get_auditors(code, df_cat)
+            # 使用折叠面板美观展示多个人员组合
+            with st.expander(f"📍 候选代码 {code} 的评审人员配置", expanded=True):
+                if auditors:
+                    a1, a2, a3 = st.columns(3)
+                    a1.success(f"**QMS 专家**\n\n{auditors['Q']}")
+                    a2.success(f"**EMS 专家**\n\n{auditors['E']}")
+                    a3.success(f"**OHSMS 专家**\n\n{auditors['S']}")
+                else:
+                    st.warning(f"未能在大类表中找到代码 {code[:2]} 开头的对应专家，请检查 category.csv。")
 
     st.divider()
 
