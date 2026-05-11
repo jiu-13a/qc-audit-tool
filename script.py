@@ -119,60 +119,6 @@ def sync_to_github(new_scope, new_code):
         return True, "同步成功"
     except Exception as e:
         return False, str(e)
-# 初始化 OCR 引擎 (建议放在缓存中，避免重复加载)
-@st.cache_resource
-def load_ocr():
-    return easyocr.Reader(['ch_sim', 'en'])
-
-def get_docx_text(file):
-    """提取 docx 文件中的所有文本"""
-    doc = Document(file)
-    full_text = []
-    for para in doc.paragraphs:
-        full_text.append(para.text)
-    return "\n".join(full_text)
-
-def analyze_contract_files(app_text, manual_text, license_info):
-    """
-    使用 AI 结合三个文件的数据进行逻辑核查
-    """
-    prompt = f"""
-你现在是认证机构的【合同评审员】，请根据提供的三份文件内容，严格按照 ZY-27 导则进行核查。
-
-### 1. 营业执照信息（OCR 提取）：
-{license_info}
-
-### 2. 申请书内容：
-{app_text[:3000]} 
-
-### 3. 管理手册摘要：
-{manual_text[:4000]}
-
----
-
-### 任务要求：
-请输出一份《合同评审预审报告》，包含以下四个部分，发现冲突必须【标红/重点提示】：
-
-1. **时限核查**：计算营业执照成立日期至今日（{datetime.now().strftime('%Y-%m-%d')}）是否满3个月。
-2. **范围覆盖性**：比对营业执照的“经营范围”与申请书的“认证范围”。判断认证范围是否超出了经营范围。
-3. **多场所与人数**：
-   - 识别申请书中的办公/生产地址，核对管理手册中是否涵盖这些地址。
-   - 确认总人数与有效人数的逻辑关系。
-4. **外包过程（重点）**：
-   - 检索管理手册 8.4 条款及相关外包描述。
-   - **冲突检测**：若手册描述了外包（如运输、检测、加工），但申请书勾选为“无外包”，请明确指出冲突。
-5. **文件评审**：
-   - 根据 ZY-27，确认手册是否覆盖了申请体系的所有标准条款。
-
-请用 Markdown 格式输出，冲突点请使用 '### ⚠️ 冲突警告' 开头。
-"""
-    # 调用你已有的 AI 接口
-    res = client.chat.completions.create(
-        model="deepseek-v4-pro",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.1
-    )
-    return res.choices[0].message.content
 
 # ==========================================
 # 3. 文件检查与加载
@@ -385,42 +331,5 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
         
             st.info("提示：GitHub 仓库已更新，数据生效可能有延迟（约 1 分钟）。")
             
-    # ==========================================
-    # 模块四：多维度合同自动评审 (Beta)
-    # ==========================================
-    st.divider()
-    st.header("📂 模块四：多维度合同自动评审 (Beta)")
-    st.caption("支持上传 申请书(.docx)、管理手册(.docx) 及 营业执照(.jpg/.png)")
-
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        file_app = st.file_uploader("上传申请书", type=["docx"])
-    with col_f2:
-        file_manual = st.file_uploader("上传管理手册", type=["docx"])
-    with col_f3:
-        file_license = st.file_uploader("上传营业执照", type=["jpg", "png", "jpeg"])
-
-    if st.button("🔍 开始全量文件评审"):
-        if not (file_app and file_manual and file_license):
-            st.error("请同时上传三个文件后再进行评审。")
-        else:
-            with st.spinner("正在进行 OCR 识别与文本解析..."):
-                # 1. 处理营业执照 (OCR)
-                reader = load_ocr()
-                image = Image.open(file_license)
-                img_array = np.array(image)
-                ocr_result = reader.readtext(img_array, detail=0)
-                license_text = " ".join(ocr_result)
-            
-                # 2. 处理 docx
-                app_text = get_docx_text(file_app)
-                manual_text = get_docx_text(file_manual)
-            
-            with st.spinner("AI 正在交叉比对文件逻辑..."):
-                report = analyze_contract_files(app_text, manual_text, license_text)
-            
-                st.markdown("### 📋 合同自动评审报告")
-                st.markdown(report)
-        
 else:
     st.error("⚠️ 核心文件缺失：请确保项目根目录下包含 `code.csv`, `calculate.csv`, `category.csv` 三个文件。")
