@@ -102,10 +102,16 @@ def extract_app_fields(file):
     # 彻底去除空格，方便正则定位
     full_text = full_text_original.replace(" ", "").replace("\u3000", "")
     
-    # 1. 提取公司名称 (不再依赖表头前缀，直接识别“XXX有限公司”字块)
-    # 匹配由中英文、数字、括号组成的“XXX有限公司”
-    comp_match = re.search(r"([\u4e00-\u9fa5a-zA-Z0-9\(\)（）]+有限公司)", full_text_original)
-    comp_name = comp_match.group(1).strip() if comp_match else "未知公司名称"
+    # 1. 提取公司名称 (锚定表头，提取其后的非空字块)
+    # 逻辑：匹配“申请组织名称”及其后的冒号、空格或方括号，直到遇到下一个空格、换行或右方括号停止
+    comp_match = re.search(r"(?:申请组织名称|企业名称|组织名称)[：:\s]*[\[［]?([^\s\]］\n]+)", full_text_original)
+    
+    if comp_match:
+        comp_name = comp_match.group(1).strip()
+    else:
+        # 如果没找到标签，再退而求其次找第一个出现的“有限公司”作为保底
+        backup_match = re.search(r"([^\s\n：:\[\]]+?(?:有限公司|股份有限公司))", full_text_original)
+        comp_name = backup_match.group(1).strip() if backup_match else "未知公司名称"
 
     # 2. 提取人数
     num_match = re.search(r"员工总人数[：:](\d+)", full_text)
