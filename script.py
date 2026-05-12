@@ -15,13 +15,12 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(page_title="启辰认证-合同评审工具", layout="wide", page_icon="🛡️")
 
-# DeepSeek 客户端初始化 (建议在线上部署时将 key 放入 st.secrets)
+# DeepSeek 客户端初始化
 API_KEY = st.secrets["deepseek_key"] 
 client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
 
-# 初始化 Session State (防止按钮点击后刷新页面导致数据丢失)
-if 'calc_done' not in st.session_state:
-    st.session_state.calc_done = False
+# 初始化 Session State
+if 'calc_done' not in st.session_state: st.session_state.calc_done = False
 if 'q' not in st.session_state: st.session_state.q = 0
 if 'e' not in st.session_state: st.session_state.e = 0
 if 's' not in st.session_state: st.session_state.s = 0
@@ -34,91 +33,107 @@ if 'candidate_codes' not in st.session_state: st.session_state.candidate_codes =
 # 2. 核心工具函数
 # ==========================================
 def get_actual_path(filename):
-    """解决 Linux/Streamlit Cloud 环境下文件名大小写敏感的问题"""
     if os.path.exists(filename): return filename
     upper_file = filename.replace(".csv", ".CSV")
     if os.path.exists(upper_file): return upper_file
     return filename
 
 def smart_read_csv(file_path, **kwargs):
-    """智能读取 CSV，防止不同编码格式导致的乱码"""
-    try:
-        return pd.read_csv(file_path, encoding='utf-8-sig', **kwargs)
-    except:
-        return pd.read_csv(file_path, encoding='gbk', **kwargs)
+    try: return pd.read_csv(file_path, encoding='utf-8-sig', **kwargs)
+    except: return pd.read_csv(file_path, encoding='gbk', **kwargs)
 
 def calculate_logic(people_val, q_risk, e_risk, s_risk, df_calc):
-    """计算各体系的基础人日"""
     try:
         df_calc.iloc[:, 0] = df_calc.iloc[:, 0].astype(str).str.strip()
         search_val = str(people_val).strip()
         row = df_calc[df_calc.iloc[:, 0] == search_val]
         if row.empty: return 0, 0, 0
-        
         risk_map = {"高": 0, "中": 1, "低": 2}
         q = float(row.iloc[0, 1 + risk_map[q_risk]])
         e = float(row.iloc[0, 4 + risk_map[e_risk]])
         s = float(row.iloc[0, 7 + risk_map[s_risk]])
         return q, e, s
     except Exception as e:
-        st.error(f"人日提取出错，请检查 calculate.csv 格式: {e}")
+        st.error(f"计算出错: {e}")
         return 0, 0, 0
 
 def get_auditors(code_str, df_cat):
-    """根据 AI 输出的代码匹配评审专家"""
     try:
-        # 提取前 1-2 位数字作为大类 (如 17.02.01 -> 17)
         match = re.search(r'^(\d{1,2})', str(code_str).strip())
         if not match: return None
-        major_cat_num = str(int(match.group(1))) # 转换为字符串且去前导0
-        
-        # 确保表的第一列按字符串对比
+        major_cat_num = str(int(match.group(1))) 
         df_cat.iloc[:, 0] = df_cat.iloc[:, 0].astype(str).str.strip()
         row = df_cat[df_cat.iloc[:, 0] == major_cat_num]
-        
         if row.empty: return None
-        
-        # 处理空值为 "/"
-        def fill_na(val):
-            return val if pd.notna(val) and str(val).strip() != "" else "/"
+        def fill_na(val): return val if pd.notna(val) and str(val).strip() != "" else "/"
+        return {"Q": fill_na(row.iloc[0, 1]), "E": fill_na(row.iloc[0, 2]), "S": fill_na(row.iloc[0, 3])}
+    except Exception: return None
 
-        return {
-            "Q": fill_na(row.iloc[0, 1]),
-            "E": fill_na(row.iloc[0, 2]),
-            "S": fill_na(row.iloc[0, 3])
-        }
-    except Exception:
-        return None
 def sync_to_github(new_scope, new_code):
-    """通过 GitHub API 将新经验实时推送到仓库"""
     try:
-        # 从 Secrets 读取 GitHub 配置
         token = st.secrets["github_token"]
         repo_name = st.secrets["github_repo"]
         file_path = "experience.csv"
-        
         g = Github(token)
         repo = g.get_repo(repo_name)
-        
-        # 1. 获取 GitHub 仓库中该文件的当前内容
         file_content = repo.get_contents(file_path)
         old_data_raw = file_content.decoded_content.decode('utf-8-sig')
-        
-        # 2. 准备新行数据 (清理掉 scope 里的换行和逗号防止 CSV 格式错乱)
         clean_scope = str(new_scope).replace(',', '，').replace('\n', ' ')
         new_line = f"\n{clean_scope},{new_code}"
-        
-        # 3. 合并内容并提交回 GitHub
         updated_content = old_data_raw.strip() + new_line
-        repo.update_file(
-            path=file_path,
-            message=f"System: 自动同步新经验 - {new_code}",
-            content=updated_content,
-            sha=file_content.sha
-        )
-        return True, "同步成功"
-    except Exception as e:
-        return False, str(e)
+        repo.update_file(path=file_path, message=f"Sync: {new_code}", content=updated_content, sha=file_content.sha)
+        return True, "成功"
+    except Exception as e: return False, str(e)
+
+# --- 针对模块四的新增特征提取函数 ---
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['ch_sim', 'en'])
+
+def extract_app_fields(file):
+    """精准抓取申请书内容"""
+    doc = Document(file)
+    full_text = ""
+    # 提取段落与表格
+    for p in doc.paragraphs: full_text += p.text + "\n"
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells: full_text += cell.text + " "
+    
+    # 提取人数
+    num_match = re.search(r"员工总人数[：:]\s*(\d+)", full_text.replace(" ", ""))
+    emp_count = num_match.group(1) if num_match else "未识别到人数"
+    
+    # 提取外包勾选
+    is_outsourced = "未知"
+    if "是否存在外包过程" in full_text:
+        out_part = full_text.split("是否存在外包过程")[1][:30]
+        if any(x in out_part for x in ["■是", "☑是", "√是"]): is_outsourced = "是"
+        elif any(x in out_part for x in ["■否", "☑否", "√否"]): is_outsourced = "否"
+        else: is_outsourced = "需人工确认选项框"
+
+    # 提取范围
+    scope_content = "未识别到范围"
+    if "QMS:" in full_text and "EMS:" in full_text:
+        try: scope_content = full_text.split("QMS:")[1].split("EMS:")[0].strip()
+        except: pass
+            
+    return {"emp_count": emp_count, "is_outsourced": is_outsourced, "scope": scope_content}
+
+def extract_manual_sections(file):
+    """精准抓取管理手册章节"""
+    doc = Document(file)
+    sections = {"scope_43": "", "outsource_8153": ""}
+    current_section = None
+    for p in doc.paragraphs:
+        text = p.text.strip()
+        if "4.3" in text and "范围" in text: current_section = "scope_43"
+        elif "8.1.5.3" in text and "外包" in text: current_section = "outsource_8153"
+        elif current_section and re.match(r"^\d+\.\d+", text) and not text.startswith("4.") and not text.startswith("8."):
+            current_section = None
+        
+        if current_section: sections[current_section] += text + "\n"
+    return sections
 
 # ==========================================
 # 3. 文件检查与加载
@@ -128,22 +143,18 @@ CALC_FILE = get_actual_path("calculate.csv")
 CAT_FILE = get_actual_path("category.csv")
 EXP_FILE = get_actual_path("experience.csv")
 
-# 初始化精简版经验库 (若不存在则创建)
 if not os.path.exists(EXP_FILE):
     pd.DataFrame(columns=["范围", "代码"]).to_csv(EXP_FILE, index=False, encoding='utf-8-sig')
 
-# 检查核心文件是否齐备
 if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
     df_code = smart_read_csv(CODE_FILE)
-    df_calc = smart_read_csv(CALC_FILE, header=1) # 第2行作为表头
+    df_calc = smart_read_csv(CALC_FILE, header=1) 
     df_cat = smart_read_csv(CAT_FILE)
     df_exp = smart_read_csv(EXP_FILE)
 
     st.title("🛡️ 启辰认证-合同评审自动化处理系统")
 
-    # ==========================================
-    # 模块一：确认人日数目
-    # ==========================================
+    # --- 模块一：确认人日数目 ---
     st.header("📊 模块一：确认人日数目")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
@@ -157,13 +168,10 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
         q, e, s = calculate_logic(sel_people, q_r, e_r, s_r, df_calc)
         st.session_state.q, st.session_state.e, st.session_state.s = q, e, s
         base_sum = q + e + s
-        
-        # 按照新需求计算两个打折数值
         st.session_state.val1 = base_sum * 0.8
         st.session_state.val2 = base_sum * 0.8 * 0.8
         st.session_state.calc_done = True
 
-    # 展示计算结果
     if st.session_state.calc_done:
         st.write(f"**提取到的各体系基础人日：** QMS: `{st.session_state.q}` | EMS: `{st.session_state.e}` | OHSMS: `{st.session_state.s}`")
         m_col1, m_col2 = st.columns(2)
@@ -172,9 +180,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
     st.divider()
 
-    # ==========================================
-    # 模块二：全量代码检索与人员判定
-    # ==========================================
+    # --- 模块二：全量代码检索 ---
     st.header("🤖 模块二：范围判定与专家匹配")
     scope = st.text_area("输入受审核方的范围描述：", height=120, placeholder="例如：电子元器件的生产、加工及销售...")
 
@@ -276,60 +282,89 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
     st.divider()
 
-    # ==========================================
-    # 模块三：批量录入与同步经验库
-    # ==========================================
-    st.divider()
-    st.header("💾 模块三：批量手动录入经验库")
-    st.info("💡 此模块为独立功能，支持一次性录入三组经验。仅填写完整（范围+代码）的行会被提交。")
 
-    # 创建表头
-    h_col1, h_col2 = st.columns([3, 1])
-    h_col1.markdown("**受审核方范围**")
-    h_col2.markdown("**审核代码**")
-
-    # 定义数据列表，用于存放输入
+    # --- 模块三：批量录入 ---
+    st.header("💾 模块三：批量同步经验库")
     batch_data = []
-
-    # 循环生成 3 组输入框
     for i in range(3):
         r_col1, r_col2 = st.columns([3, 1])
-        with r_col1:
-            input_scope = st.text_input(f"范围 {i+1}", label_visibility="collapsed", key=f"manual_scope_{i}", placeholder=f"请输入第 {i+1} 组范围描述...")
-        with r_col2:
-            input_code = st.text_input(f"代码 {i+1}", label_visibility="collapsed", key=f"manual_code_{i}", placeholder="例如: 29.01.01")
-        
-        # 只要范围和代码都不为空，就加入待提交列表
-        if input_scope.strip() and input_code.strip():
-            batch_data.append({"scope": input_scope.strip(), "code": input_code.strip()})
+        with r_col1: input_scope = st.text_input(f"范围 {i}", label_visibility="collapsed", key=f"s_{i}", placeholder="范围")
+        with r_col2: input_code = st.text_input(f"代码 {i}", label_visibility="collapsed", key=f"c_{i}", placeholder="代码")
+        if input_scope.strip() and input_code.strip(): batch_data.append({"scope": input_scope.strip(), "code": input_code.strip()})
 
-    # 提交按钮
-    if st.button("🚀 批量确认并同步至 GitHub", type="primary"):
-        if not batch_data:
-            st.warning("⚠️ 请至少完整填写一组“范围”和“代码”后再提交。")
+    if st.button("🚀 批量同步至 GitHub", type="primary"):
+        if not batch_data: st.warning("请填写完整。")
         else:
             success_count = 0
-            fail_logs = []
-            
-            with st.spinner(f"正在同步 {len(batch_data)} 条数据至 GitHub..."):
+            with st.spinner(f"同步 {len(batch_data)} 条..."):
                 for item in batch_data:
                     success, msg = sync_to_github(item["scope"], item["code"])
-                    if success:
-                        success_count += 1
-                    else:
-                        fail_logs.append(f"代码 {item['code']} 同步失败: {msg}")
-            
-            # 结果反馈
-            if success_count > 0:
-                st.success(f"✅ 成功同步 {success_count} 条新经验！")
-                if success_count == len(batch_data):
-                    st.balloons()
-            
-            if fail_logs:
-                for err in fail_logs:
-                    st.error(err)
-        
-            st.info("提示：GitHub 仓库已更新，数据生效可能有延迟（约 1 分钟）。")
-            
+                    if success: success_count += 1
+                    else: st.error(f"失败: {msg}")
+            if success_count > 0: st.success(f"成功同步 {success_count} 条！")
+
+    st.divider()
+
+    # ==========================================
+    # 模块四：合同文件多维度评审 (新增)
+    # ==========================================
+    st.header("📂 模块四：合同与体系文件精准核查")
+    st.caption("系统将自动拆解表格提取人数/外包等关键信息，并与手册及执照比对。")
+
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1: f_app = st.file_uploader("1. 申请书 (.docx)", type=["docx"], key="file_app")
+    with col_f2: f_manual = st.file_uploader("2. 管理手册 (.docx)", type=["docx"], key="file_man")
+    with col_f3: f_license = st.file_uploader("3. 营业执照 (.jpg/.png)", type=["jpg", "png", "jpeg"], key="file_lic")
+
+    if st.button("🔍 运行精准核查 (OCR+解析)"):
+        if not (f_app and f_manual and f_license):
+            st.error("⚠️ 请先将申请书、手册、营业执照三个文件全部上传。")
+        else:
+            try:
+                with st.spinner("正在穿透表格提取核心数据..."):
+                    # 提取申请书
+                    app_data = extract_app_fields(f_app)
+                    # 提取手册
+                    man_data = extract_manual_sections(f_manual)
+                    # OCR 执照
+                    reader = load_ocr()
+                    license_text = " ".join(reader.readtext(np.array(Image.open(f_license)), detail=0))
+
+                with st.spinner("数据已提取，AI 正在进行逻辑冲突检测..."):
+                    check_prompt = f"""
+                    你现在是北京北方启辰认证的评审专家。请根据我提取出的精准特征数据，出具预审报告。
+
+                    【资料 1：申请书提取结果】
+                    - 申报总人数：{app_data['emp_count']}
+                    - 认证范围描述：{app_data['scope']}
+                    - 外包勾选状态：{app_data['is_outsourced']}
+
+                    【资料 2：管理手册提取结果】
+                    - 4.3 体系范围描述：{man_data['scope_43'] if man_data['scope_43'] else '未找到4.3章节'}
+                    - 8.1.5.3 外包控制描述：{man_data['outsource_8153'] if man_data['outsource_8153'] else '未找到外包章节'}
+
+                    【资料 3：营业执照 OCR 内容】
+                    - 内容：{license_text}
+
+                    核查要求（请用 Markdown 列出清单）：
+                    1. 营业执照成立是否满 3 个月（以今日 {datetime.now().date()} 为准）？
+                    2. 申请书的范围是否超出了营业执照的经营范围？
+                    3. 申请书的人数在逻辑上是否合理？
+                    4. 【⚠️极其重要】：对比申请书和手册关于“外包”的描述。如果手册里写了有外包过程，但申请书的状态是“否”，必须【标红加粗】警告业务员。
+                    """
+                    
+                    res = client.chat.completions.create(
+                        model="deepseek-v4-pro",
+                        messages=[{"role":"user","content":check_prompt}],
+                        temperature=0.1
+                    )
+                    st.success("解析比对完成！")
+                    st.markdown("### 📋 自动合同评审报告")
+                    st.markdown(res.choices[0].message.content)
+                    
+            except Exception as e:
+                st.error(f"核查过程中出现错误: {e}")
+                st.info("请确保上传的是标准格式的 docx 文件。")
+
 else:
     st.error("⚠️ 核心文件缺失：请确保项目根目录下包含 `code.csv`, `calculate.csv`, `category.csv` 三个文件。")
