@@ -93,47 +93,99 @@ def load_ocr():
 def extract_app_fields(file):
     """精准抓取申请书内容"""
     doc = Document(file)
-    full_text = ""
-    # 提取段落与表格
-    for p in doc.paragraphs: full_text += p.text + "\n"
+    full_text_original = ""
+    for p in doc.paragraphs: full_text_original += p.text + "\n"
     for table in doc.tables:
         for row in table.rows:
-            for cell in row.cells: full_text += cell.text + " "
+            for cell in row.cells: full_text_original += cell.text + " "
     
-    # 提取人数
-    num_match = re.search(r"员工总人数[：:]\s*(\d+)", full_text.replace(" ", ""))
+    # 彻底去除空格，方便正则定位
+    full_text = full_text_original.replace(" ", "").replace("\u3000", "")
+    
+    # 1. 提取公司名称 (用于后续文件编号比对)
+    comp_match = re.search(r"(申请组织名称|企业名称|组织名称)[：:]+(.*?)\n", full_text_original)
+    comp_name = comp_match.group(2).strip() if comp_match else "未知公司名称"
+
+    # 2. 提取人数
+    num_match = re.search(r"员工总人数[：:](\d+)", full_text)
     emp_count = num_match.group(1) if num_match else "未识别到人数"
     
-    # 提取外包勾选
+    # 3. 提取不适用条款
+    na_match = re.search(r"QMS不适用条款[：:](.*?)是否存在外包过程", full_text, re.DOTALL)
+    na_clause = na_match.group(1).strip() if na_match else "未填写"
+
+    # 4. 提取运行时间
+    date_match = re.search(r"管理体系开始运行时间[：:](.*?)(内审时间|管理体系内部审核时间)", full_text, re.DOTALL)
+    run_date = date_match.group(1).strip() if date_match else "未识别到时间"
+
+    # 5. 提取外包勾选
     is_outsourced = "未知"
     if "是否存在外包过程" in full_text:
-        out_part = full_text.split("是否存在外包过程")[1][:30]
+        out_part = full_text.split("是否存在外包过程")[1][:20]
         if any(x in out_part for x in ["■是", "☑是", "√是"]): is_outsourced = "是"
         elif any(x in out_part for x in ["■否", "☑否", "√否"]): is_outsourced = "否"
-        else: is_outsourced = "需人工确认选项框"
+        else: is_outsourced = "未清晰勾选"
 
-    # 提取范围
+    # 6. 提取范围
     scope_content = "未识别到范围"
-    if "QMS:" in full_text and "EMS:" in full_text:
-        try: scope_content = full_text.split("QMS:")[1].split("EMS:")[0].strip()
+    if "QMS:" in full_text_original and "EMS:" in full_text_original:
+        try: scope_content = full_text_original.split("QMS:")[1].split("EMS:")[0].strip()
         except: pass
             
-    return {"emp_count": emp_count, "is_outsourced": is_outsourced, "scope": scope_content}
+    return {
+        "comp_name": comp_name,
+        "emp_count": emp_count,
+        "is_outsourced": is_outsourced,
+        "scope": scope_content,
+        "na_clause": na_clause,
+        "run_date": run_date
+    }
 
 def extract_manual_sections(file):
-    """精准抓取管理手册章节"""
+    """精准抓取管理手册章节与属性"""
     doc = Document(file)
     sections = {"scope_43": "", "outsource_8153": ""}
     current_section = None
+    full_text_original = ""
+    
     for p in doc.paragraphs:
         text = p.text.strip()
+        full_text_original += text + "\n"
         if "4.3" in text and "范围" in text: current_section = "scope_43"
         elif "8.1.5.3" in text and "外包" in text: current_section = "outsource_8153"
         elif current_section and re.match(r"^\d+\.\d+", text) and not text.startswith("4.") and not text.startswith("8."):
             current_section = None
-        
         if current_section: sections[current_section] += text + "\n"
-    return sections
+        
+    table_83_info = []
+    for table in doc.tables:
+        for row in table.rows:
+            row_text = " ".join([cell.text.strip() for cell in row.cells])
+            full_text_original += row_text + "\n"
+            row_no_space = row_text.replace(" ", "")
+            # 专门定位包含8.3的表格行
+            if "8.3" in row_no_space and ("设计" in row_no_space or "开发" in row_no_space or "▲" in row_no_space or "●" in row_no_space or "○" in row_no_space):
+                table_83_info.append(row_text)
+
+    # 优化外包状态判定
+    outsource_status = sections["outsource_8153"]
+    if "无外包过程" in outsource_status or "无外包过程" in full_text_original:
+        outsource_status = "【明确无外包】经识别公司无外包过程"
+
+    # 提取日期与编号
+    date_match = re.search(r"(发布日期|实施日期)[：:]?\s*([0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日|[0-9\-\./]+)", full_text_original)
+    pub_date = date_match.group(2) if date_match else "未找到日期"
+    
+    doc_no_match = re.search(r"文件编号[：:]?\s*([A-Za-z0-9\-\.]+)", full_text_original)
+    doc_no = doc_no_match.group(1) if doc_no_match else "未找到编号"
+
+    return {
+        "scope_43": sections["scope_43"],
+        "outsource_8153": outsource_status,
+        "pub_date": pub_date,
+        "doc_no": doc_no,
+        "table_83": "\n".join(set(table_83_info)) if table_83_info else "未在表格中找到8.3条款记录"
+    }
 
 # ==========================================
 # 3. 文件检查与加载
@@ -332,25 +384,59 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
                 with st.spinner("数据已提取，AI 正在进行逻辑冲突检测..."):
                     check_prompt = f"""
-                    你现在是北京北方启辰认证的评审专家。请根据我提取出的精准特征数据，出具预审报告。
+                    你现在是【北京北方启辰认证服务有限公司】的高级评审专家。
+                    请根据我提取出的精准数据，出具一份高标准的《预审纠错报告》。
 
                     【资料 1：申请书提取结果】
+                    - 申请组织全称：{app_data['comp_name']}
                     - 申报总人数：{app_data['emp_count']}
                     - 认证范围描述：{app_data['scope']}
                     - 外包勾选状态：{app_data['is_outsourced']}
+                    - QMS不适用条款：{app_data['na_clause']}
+                    - 体系开始运行时间：{app_data['run_date']}
 
                     【资料 2：管理手册提取结果】
+                    - 手册文件编号：{man_data['doc_no']}
+                    - 手册发布/实施日期：{man_data['pub_date']}
                     - 4.3 体系范围描述：{man_data['scope_43'] if man_data['scope_43'] else '未找到4.3章节'}
-                    - 8.1.5.3 外包控制描述：{man_data['outsource_8153'] if man_data['outsource_8153'] else '未找到外包章节'}
+                    - 8.1.5.3 外包控制描述：{man_data['outsource_8153']}
+                    - 职能分配表8.3记录：{man_data['table_83']}
 
                     【资料 3：营业执照 OCR 内容】
                     - 内容：{license_text}
 
-                    核查要求（请用 Markdown 列出清单）：
-                    1. 营业执照成立是否满 3 个月（以今日 {datetime.now().date()} 为准）？
-                    2. 申请书的范围是否超出了营业执照的经营范围？
-                    3. 申请书的人数在逻辑上是否合理？
-                    4. 【⚠️极其重要】：对比申请书和手册关于“外包”的描述。如果手册里写了有外包过程，但申请书的状态是“否”，必须【标红加粗】警告业务员。
+                    核心逻辑
+                    1. **外包控制一致性**：如果手册描述为“【明确无外包】”，且申请书勾选“否”，直接通过。如果有外包描述但申请书选“否”，必须严重警告。
+                    2. **不适用条款核查**：对比申请书的“QMS不适用条款（{app_data['na_clause']}）”与“职能分配表8.3记录”。若申请书写了8.3不适用，手册的分配表中也应标注为无责任或不适用。是否一致？
+                    3. **运行日期倒推**：比较申请书的“体系开始运行时间”与手册的“发布日期”是否一致。且是否满 3 个月（以今日 {datetime.now().date()} 为准）
+                    4. **文件编号校验**：提取手册文件编号（{man_data['doc_no']}）中的字母缩写，判断它是否是“{app_data['comp_name']}”公司名称的拼音首字母缩写？如果完全无关，请提醒可能套用模板未改编号。
+                    5. **资质时限检查**：营业执照成立是否满 3 个月（以今日 {datetime.now().date()} 为准）？
+                    6. **业务范围覆盖**：申请书的范围是否超出了营业执照的经营范围？
+
+                    输出格式要求：
+                    一、**识别内容**：
+                    1.**申请书内容**
+	                    [申报人数]：
+	                    [认证范围]：
+	                    [外包勾选状态]：
+	                    [QMS不适用条款]：
+	                    [管理体系运行日期]：
+	                    [公司名称]：
+                    2.**管理手册内容**
+                    	[体系范围描述]：
+	                    [外包控制描述]：
+	                    [8.3适用情况]：
+	                    [文件编号]：
+                    3.**营业执照内容**
+	                    [经营范围]：
+                二、**预审报告**：
+                    1.**结论**：予以受理 / 需修改/ 不予受理
+                    2.**成立时长**：满足三个月/不满三个月
+                    3.**范围匹配**：匹配/不匹配
+                    4.**外包情况**：存在/不存在/申请书和手册内容不一致
+                    5.**不适用条款核查**：一致/不一致
+                    6.**体系运行时间**：满足三个月/不满三个月
+                    7.**文件编号核查**：符合/不符合
                     """
                     
                     res = client.chat.completions.create(
@@ -359,7 +445,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
                         temperature=0.1
                     )
                     st.success("解析比对完成！")
-                    st.markdown("### 📋 自动合同评审报告")
+                    st.markdown("### 📋 自动合同评审纠错报告")
                     st.markdown(res.choices[0].message.content)
                     
             except Exception as e:
