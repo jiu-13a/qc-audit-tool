@@ -185,9 +185,17 @@ def extract_manual_sections(file):
     # 顺便去除了日期中可能因为排版产生的多余空格
     pub_date = date_match.group(1).replace(" ", "") if date_match else "未找到颁布令日期"
     
-    # 提取文件编号
-    doc_no_match = re.search(r"文件编号[：:]?\s*([A-Za-z0-9\-\.]+)", full_text_original)
-    doc_no = doc_no_match.group(1) if doc_no_match else "未找到编号"
+    # 提取文件编号 (优化点：增加斜杠/、下划线_，处理表格换行和空白)
+    # 1. [：:\s]* 兼容中英文冒号及表格造成的换行或空格
+    # 2. ([A-Za-z0-9\/\-\._]+) 增加了对 / 和 _ 的匹配，确保能抓取完整的编号
+    doc_no_match = re.search(r"文件编号[：:\s]*([A-Za-z0-9\/\-\._]+)", full_text_original)
+    
+    if doc_no_match:
+        doc_no = doc_no_match.group(1).strip()
+    else:
+        # 保底方案：如果上面没匹配到，尝试搜索“编号”二字开头的情况（兼容图片1右上角那种格式）
+        backup_no = re.search(r"(?:编号|Doc\.?\s?No)[：:\s]*([A-Za-z0-9\/\-\._]+)", full_text_original)
+        doc_no = backup_no.group(1).strip() if backup_no else "未找到编号"
 
     return {
         "scope_43": sections["scope_43"],
