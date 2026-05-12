@@ -102,9 +102,10 @@ def extract_app_fields(file):
     # 彻底去除空格，方便正则定位
     full_text = full_text_original.replace(" ", "").replace("\u3000", "")
     
-    # 1. 提取公司名称 (用于后续文件编号比对)
-    comp_match = re.search(r"(申请组织名称|企业名称|组织名称)[：:]+(.*?)\n", full_text_original)
-    comp_name = comp_match.group(2).strip() if comp_match else "未知公司名称"
+    # 1. 提取公司名称 (不再依赖表头前缀，直接识别“XXX有限公司”字块)
+    # 匹配由中英文、数字、括号组成的“XXX有限公司”
+    comp_match = re.search(r"([\u4e00-\u9fa5a-zA-Z0-9\(\)（）]+有限公司)", full_text_original)
+    comp_name = comp_match.group(1).strip() if comp_match else "未知公司名称"
 
     # 2. 提取人数
     num_match = re.search(r"员工总人数[：:](\d+)", full_text)
@@ -172,10 +173,13 @@ def extract_manual_sections(file):
     if "无外包过程" in outsource_status or "无外包过程" in full_text_original:
         outsource_status = "【明确无外包】经识别公司无外包过程"
 
-    # 提取日期与编号
-    date_match = re.search(r"(发布日期|实施日期)[：:]?\s*([0-9]{4}年[0-9]{1,2}月[0-9]{1,2}日|[0-9\-\./]+)", full_text_original)
-    pub_date = date_match.group(2) if date_match else "未找到日期"
+    # 提取日期 (定位“总经理”签字后的第一个日期，通常位于 0.4 颁布令)
+    # [\s\S]*? 表示跨行寻找最近的日期格式
+    date_match = re.search(r"总经理[\s\S]*?([0-9]{4}\s*年\s*[0-9]{1,2}\s*月\s*[0-9]{1,2}\s*日|[0-9]{4}[-/\.][0-9]{1,2}[-/\.][0-9]{1,2})", full_text_original)
+    # 顺便去除了日期中可能因为排版产生的多余空格
+    pub_date = date_match.group(1).replace(" ", "") if date_match else "未找到颁布令日期"
     
+    # 提取文件编号
     doc_no_match = re.search(r"文件编号[：:]?\s*([A-Za-z0-9\-\.]+)", full_text_original)
     doc_no = doc_no_match.group(1) if doc_no_match else "未找到编号"
 
@@ -407,7 +411,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE]):
 
                     核心逻辑
                     1. **外包控制一致性**：如果手册{man_data['outsource_8153']}描述为“【明确无外包】”，且申请书{app_data['is_outsourced']}勾选“否”，直接通过。如果有外包描述但申请书选“否”，必须严重警告。（不比较营业执照内容）
-                    2. **不适用条款核查**：对比申请书的“QMS不适用条款（{app_data['na_clause']}）”与“职能分配表8.3记录{man_data['table_83']}”。若申请书写了8.3不适用，手册的分配表中也应标注为无责任或不适用。（不比较营业执照内容）。
+                    2. **不适用条款核查**：对比申请书的“QMS不适用条款（{app_data['na_clause']}）”与“职能分配表8.3记录{man_data['table_83']}”。若申请书写了8.3不适用，手册的分配表中也应标注为无责任或不适用。（不参考营业执照内容，不做多余分析，仅比较申请书内容与手册是否一致）。
                     3. **运行日期倒推**：比较申请书的“体系开始运行时间”与手册的“发布日期”是否一致。且是否满 3 个月（以今日 {datetime.now().date()} 为准）
                     4. **文件编号校验**：提取手册文件编号（{man_data['doc_no']}）中的字母缩写，判断它是否是“{app_data['comp_name']}”公司名称的拼音首字母缩写？如果完全无关，请提醒可能套用模板未改编号。
                     5. **资质时限检查**：营业执照成立是否满 3 个月（以今日 {datetime.now().date()} 为准）？
