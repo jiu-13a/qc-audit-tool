@@ -324,9 +324,23 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
 						# 查风险
 						risk_info = df_risk[df_risk.iloc[:, 0] == code]
 						if not risk_info.empty:
-							q_level = num_to_text.get(int(risk_info.iloc[0, 1]), "中") if pd.notna(risk_info.iloc[0, 1]) else "中"
-							e_level = num_to_text.get(int(risk_info.iloc[0, 2]), "中") if pd.notna(risk_info.iloc[0, 2]) else "中"
-							s_level = num_to_text.get(int(risk_info.iloc[0, 3]), "中") if pd.notna(risk_info.iloc[0, 3]) else "中"
+							def safe_get_risk(col_idx):
+								try:
+									# 1. 检查是否存在该列（防止 CSV 缺列导致 IndexError）
+									if col_idx < risk_info.shape[1]:
+										val = risk_info.iloc[0, col_idx]
+										# 2. 检查是否为空值或纯空格
+										if pd.notna(val) and str(val).strip() != "":
+											# 3. 先转 float 再转 int，兼容 "3.0" 和 " 3 " 这种乱码
+											return num_to_text.get(int(float(str(val).strip())), "中")
+								except:
+									pass
+								return "中"  # 出现任何意外，默认返回中风险
+
+							# 安全提取第2、3、4列
+							q_level = safe_get_risk(1)
+							e_level = safe_get_risk(2)
+							s_level = safe_get_risk(3)
 						else:
 							q_level = e_level = s_level = "中"
 							st.caption(f"⚠️ risk.csv 中无此代码，已默认按中风险计算。")
