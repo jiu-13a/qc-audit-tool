@@ -218,8 +218,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
         license_file = st.file_uploader("上传营业执照比对范围", type=["jpg", "png", "jpeg"], key="pre_lic")
 
     if st.button("🚀 开始全链路解析", type="primary"):
-	scope_input = st.session_state.scope_input
-	if not scope_input.strip():
+		scope_input = st.session_state.scope_input
+		if not scope_input.strip():
             st.warning("⚠️ 请输入审核范围描述！")
         elif not system_type:
             st.warning("⚠️ 请至少选择一个认证体系！")
