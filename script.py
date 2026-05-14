@@ -251,7 +251,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
             st.warning("⚠️ 请输入审核范围描述！")
         elif not system_type:
             st.warning("⚠️ 请至少选择一个认证体系！")
-	else:
+    else:
     # === 阶段 1：可选的营业执照一致性校验 ===
     license_pass = True
     if license_file is not None:
