@@ -9,6 +9,7 @@ import easyocr
 import numpy as np
 from PIL import Image
 from datetime import datetime
+import time
 
 # ==========================================
 # 1. 基础配置与 API 初始化
@@ -247,6 +248,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                             st.stop()  # 阻断后续运行
                         else:
                             st.success("✅ 营业执照核对通过，申请范围在经营范围内。")
+							time.sleep(3)
                     except Exception as e:
                         st.error(f"执照比对调用失败: {e}")
                         st.stop()
