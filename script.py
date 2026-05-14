@@ -28,6 +28,7 @@ if 'val1' not in st.session_state: st.session_state.val1 = 0.0
 if 'val2' not in st.session_state: st.session_state.val2 = 0.0
 if 'ai_ans' not in st.session_state: st.session_state.ai_ans = ""
 if 'candidate_codes' not in st.session_state: st.session_state.candidate_codes = []
+if 'scope_input' not in st.session_state: st.session_state.scope_input = ""
 
 # ==========================================
 # 2. 核心辅助函数
@@ -206,7 +207,12 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        scope_input = st.text_area("✍️ 请输入受审核方的范围描述：", height=120, placeholder="例如：电子元器件的生产...")
+    st.text_area(
+        "✍️ 请输入受审核方的范围描述：",
+        height=120,
+        placeholder="例如：电子元器件的生产...",
+        key="scope_input"            # 自动存储到 st.session_state.scope_input
+    )
         people_list = df_calc.iloc[:, 0].dropna().unique().tolist()
         c_p, c_s = st.columns(2)
         with c_p: emp_count = st.selectbox("受审核组织人数", options=people_list)
@@ -217,7 +223,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
         license_file = st.file_uploader("上传营业执照比对范围", type=["jpg", "png", "jpeg"], key="pre_lic")
 
     if st.button("🚀 开始全链路解析", type="primary"):
-        if not scope_input.strip():
+    scope_input = st.session_state.scope_input   # ✅ 从 session_state 读取当前值
+    if not scope_input.strip():
             st.warning("⚠️ 请输入审核范围描述！")
         elif not system_type:
             st.warning("⚠️ 请至少选择一个认证体系！")
