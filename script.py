@@ -194,6 +194,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     df_cat = smart_read_csv(CAT_FILE)
     df_exp = smart_read_csv(EXP_FILE)
     df_risk = smart_read_csv(RISK_FILE)
+	# 自动去除全表所有单元格前后的空格
+	df_risk = df_risk.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
     st.title("🛡️ 启辰认证-智能评审自动化系统")
 
@@ -336,7 +338,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         s_days = s_base if "OHSMS" in system_type else 0.0
                         
                         total_base = q_days + e_days + s_days
-                        final_days = total_base * 0.7 * 0.8 * 0.8 # 自动多体系优惠计算
+                        final_days = total_base * 0.7 * 0.8 # 自动多体系优惠计算
+						final_days = total_base * 0.7 * 0.8 * 0.8 # 自动多体系优惠计算
 
                         # 配老师
                         auditors = get_auditors(code, df_cat)
