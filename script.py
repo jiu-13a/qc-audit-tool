@@ -278,9 +278,9 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         else:
                             st.success("✅ 营业执照核对通过，申请范围在经营范围内。")
                             time.sleep(3)
-                except Exception as e:
-                st.error(f"执照比对调用失败: {e}")
-                st.stop()
+                    except Exception as e:
+                        st.error(f"执照比对调用失败: {e}")
+                        st.stop()
 
     # === 阶段 2：经验检索 (优先) ===
     candidate_codes = []
