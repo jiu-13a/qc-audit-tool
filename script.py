@@ -353,9 +353,9 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     st.divider()
 
     # ==========================================
-    # 模块三：批量录入与同步经验库 (原样保留)
+    # 模块二：批量录入与同步经验库 (原样保留)
     # ==========================================
-    st.header("💾 模块三：批量同步经验库")
+    st.header("💾 模块二：批量同步经验库")
     batch_data = []
     for i in range(3):
         r_col1, r_col2 = st.columns([3, 1])
@@ -377,9 +377,9 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     st.divider()
 
     # ==========================================
-    # 模块四：合同与体系文件精准核查 (原样保留)
+    # 模块三：合同与体系文件精准核查 (原样保留)
     # ==========================================
-    st.header("📂 模块四：合同与体系文件精准核查")
+    st.header("📂 模块三：合同与体系文件精准核查")
     st.caption("系统将自动拆解表格提取人数/外包等关键信息，并与手册及执照比对。")
 
     col_f1, col_f2, col_f3 = st.columns(3)
