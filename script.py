@@ -208,7 +208,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     
     with col1:
     	st.text_area("✍️ 请输入受审核方的范围描述：", height=120, placeholder="例如：电子元器件的生产...", key="scope_input")
-        people_list = df_calc.iloc[:, 0].dropna().unique().tolist()
+    	people_list = df_calc.iloc[:, 0].dropna().unique().tolist()
         c_p, c_s = st.columns(2)
         with c_p: emp_count = st.selectbox("受审核组织人数", options=people_list)
         with c_s: system_type = st.multiselect("认证体系 (多选)", ["QMS", "EMS", "OHSMS"], default=["QMS"])
