@@ -357,7 +357,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                             st.write(f"专家: {auditors['S'] if auditors else '/'}")
                         with c_sum:
                             st.markdown("🎯 **建议核发人日**")
-                            st.metric(label="(Q+E+S)×70%×80%×80%", value=f"{final_days:.2f} 天")
+                            st.metric(label="(Q+E+S)×70%×80%", value=f"{final_days:.2f} 天")
             else:
                 st.error("未能从范围内提取出有效的代码，请检查范围描述。")
 
