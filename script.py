@@ -337,7 +337,6 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         
                         total_base = q_days + e_days + s_days
                         final_days = total_base * 0.7 * 0.8 # 自动多体系优惠计算
-						final_days = total_base * 0.7 * 0.8 * 0.8 # 自动多体系优惠计算
 
                         # 配老师
                         auditors = get_auditors(code, df_cat)
