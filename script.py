@@ -329,14 +329,15 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                             q_level = e_level = s_level = "中"
                             st.caption(f"⚠️ risk.csv 中无此代码，已默认按中风险计算。")
 
-                        # 算天数
-						q_base, e_base, s_base = calculate_logic(emp_count, q_level, e_level, s_level, df_calc)
-						e_days = e_base if EMS in system_type else 0.0
-						q_days = q_base if QMS in system_type else 0.0
-						s_days = s_base if OHSMS in system_type else 0.0
-
-						total_base = q_days + e_days + s_days
-						final_days = total_base  0.7  0.8  0.8
+                        
+						# 算天数
+                        q_base, e_base, s_base = calculate_logic(emp_count, q_level, e_level, s_level, df_calc)
+                        q_days = q_base if "QMS" in system_type else 0.0
+                        e_days = e_base if "EMS" in system_type else 0.0
+                        s_days = s_base if "OHSMS" in system_type else 0.0
+                        
+                        total_base = q_days + e_days + s_days
+                        final_days = total_base * 0.7 * 0.8 * 0.8 # 自动多体系优惠计算
 						
                         # 配老师
                         auditors = get_auditors(code, df_cat)
