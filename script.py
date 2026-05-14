@@ -335,7 +335,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         e_days = e_base if "EMS" in system_type else 0.0
                         s_days = s_base if "OHSMS" in system_type else 0.0
                         
-                        total_base = q_days + e_days + s_days
+                        total = (q_d if "QMS" in system_type else 0) + (e_d if "EMS" in system_type else 0) + (s_d if "OHSMS" in system_type else 0)
                     	# 1. 计算两种结果
                         final_1 = total * 0.7 * 0.8 * 0.8
                         final_2 = total * 0.7 * 0.8
