@@ -338,19 +338,19 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         
                         total_base = q_days + e_days + s_days
                     	# 1. 计算两种结果
-                    	final_1 = total * 0.7 * 0.8 * 0.8
-                    	final_2 = total * 0.7 * 0.8
+                        final_1 = total * 0.7 * 0.8 * 0.8
+                        final_2 = total * 0.7 * 0.8
                     
-                    	auditors = get_auditors(code, df_cat)
-                    	st.write(f"**风险分级：** Q-{q_l} | E-{e_l} | S-{s_l}")
-                    	st.write(f"**建议专家：** Q:{auditors['Q']} | E:{auditors['E']} | S:{auditors['S']}")
+                        auditors = get_auditors(code, df_cat)
+                        st.write(f"**风险分级：** Q-{q_l} | E-{e_l} | S-{s_l}")
+                        st.write(f"**建议专家：** Q:{auditors.get('Q', '/')} | E:{auditors.get('E', '/')} | S:{auditors.get('S', '/')}")
                     
-                    	# 2. 并排展示两个公式的结果
-                    	col_m1, col_m2 = st.columns(2)
-                    	with col_m1:
-                        	st.metric("(Q+E+S)×70%×80%×80%", f"{final_1:.2f} 天")
-                    	with col_m2:
-                        	st.metric("(Q+E+S)×70%×80%", f"{final_2:.2f} 天")
+                        # 2. 并排展示两个公式的结果
+                        col_m1, col_m2 = st.columns(2)
+                        with col_m1:
+                             st.metric("(Q+E+S)×70%×80%×80%", f"{final_1:.2f} 天")
+                        with col_m2:
+                             st.metric("(Q+E+S)×70%×80%", f"{final_2:.2f} 天")
 
                         # 配老师
                         auditors = get_auditors(code, df_cat)
