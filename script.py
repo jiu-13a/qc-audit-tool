@@ -193,7 +193,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     df_calc = smart_read_csv(CALC_FILE, header=1) 
     df_cat = smart_read_csv(CAT_FILE)
     df_exp = smart_read_csv(EXP_FILE)
-    df_risk = smart_read_csv(RISK_FILE)
+    if df_risk is not None:
+            df_risk = df_risk.map(lambda x: x.strip() if isinstance(x, str) else x)
 
     st.title("🛡️ 启辰认证-智能评审自动化系统")
 
@@ -336,7 +337,20 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                         s_days = s_base if "OHSMS" in system_type else 0.0
                         
                         total_base = q_days + e_days + s_days
-                        final_days = total_base * 0.7 * 0.8 # 自动多体系优惠计算
+                    	# 1. 计算两种结果
+                    	final_1 = total * 0.7 * 0.8 * 0.8
+                    	final_2 = total * 0.7 * 0.8
+                    
+                    	auditors = get_auditors(code, df_cat)
+                    	st.write(f"**风险分级：** Q-{q_l} | E-{e_l} | S-{s_l}")
+                    	st.write(f"**建议专家：** Q:{auditors['Q']} | E:{auditors['E']} | S:{auditors['S']}")
+                    
+                    	# 2. 并排展示两个公式的结果
+                    	col_m1, col_m2 = st.columns(2)
+                    	with col_m1:
+                        	st.metric("(Q+E+S)×70%×80%×80%", f"{final_1:.2f} 天")
+                    	with col_m2:
+                        	st.metric("(Q+E+S)×70%×80%", f"{final_2:.2f} 天")
 
                         # 配老师
                         auditors = get_auditors(code, df_cat)
