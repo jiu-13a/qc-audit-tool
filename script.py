@@ -247,10 +247,10 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
 
     if st.button("🚀 开始全链路解析", type="primary"):
         scope_input = st.session_state.scope_input  # ← 新增这一行，从 session 取值
-        # if not scope_input.strip():
-    st.warning("⚠️ 请输入审核范围描述！")
-    elif not system_type:
-    st.warning("⚠️ 请至少选择一个认证体系！")
+        if not scope_input.strip():
+            st.warning("⚠️ 请输入审核范围描述！")
+        elif not system_type:
+            st.warning("⚠️ 请至少选择一个认证体系！")
 else:
     # === 阶段 1：可选的营业执照一致性校验 ===
     license_pass = True
