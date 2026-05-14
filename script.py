@@ -9,8 +9,6 @@ import easyocr
 import numpy as np
 from PIL import Image
 from datetime import datetime
-import pypandoc
-import io
 
 # ==========================================
 # 1. 基础配置与 API 初始化
@@ -83,18 +81,6 @@ def sync_to_github(new_scope, new_code):
 def load_ocr():
     return easyocr.Reader(['ch_sim', 'en'])
 
-def handle_doc_file(uploaded_file):
-    """如果文件是 .doc，则转换为 .docx 的字节流"""
-    if uploaded_file.name.endswith(".doc"):
-        with st.spinner(f"正在转换 {uploaded_file.name} 为兼容格式..."):
-            with open("temp.doc", "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            pypandoc.convert_file("temp.doc", 'docx', outputfile="temp.docx")
-            with open("temp.docx", "rb") as f:
-                docx_bytes = io.BytesIO(f.read())
-            return docx_bytes
-    return uploaded_file
-
 def extract_app_fields(file):
     doc = Document(file)
     full_text_original = ""
@@ -105,8 +91,16 @@ def extract_app_fields(file):
     
     full_text = full_text_original.replace(" ", "").replace("\u3000", "")
     
-    comp_match = re.search(r"([\u4e00-\u9fa5a-zA-Z0-9\(\)（）]+有限公司)", full_text_original)
-    comp_name = comp_match.group(1).strip() if comp_match else "未知公司名称"
+    # 1. 提取公司名称 (锚定表头，提取其后的非空字块)
+    # 逻辑：匹配“申请组织名称”及其后的冒号、空格或方括号，直到遇到下一个空格、换行或右方括号停止
+    comp_match = re.search(r"(?:申请组织名称|企业名称|组织名称)[：:\s]*[\[［]?([^\s\]］\n]+)", full_text_original)
+    
+    if comp_match:
+        comp_name = comp_match.group(1).strip()
+    else:
+        # 如果没找到标签，再退而求其次找第一个出现的“有限公司”作为保底
+        backup_match = re.search(r"([^\s\n：:\[\]]+?(?:有限公司|股份有限公司))", full_text_original)
+        comp_name = backup_match.group(1).strip() if backup_match else "未知公司名称"
 
     num_match = re.search(r"员工总人数[：:](\d+)", full_text)
     emp_count = num_match.group(1) if num_match else "未识别到人数"
@@ -160,7 +154,10 @@ def extract_manual_sections(file):
     if "无外包过程" in outsource_status or "无外包过程" in full_text_original:
         outsource_status = "【明确无外包】经识别公司无外包过程"
 
+    # 提取日期 (定位“总经理”签字后的第一个日期，通常位于 0.4 颁布令)
+    # [\s\S]*? 表示跨行寻找最近的日期格式
     date_match = re.search(r"总经理[\s\S]*?([0-9]{4}\s*年\s*[0-9]{1,2}\s*月\s*[0-9]{1,2}\s*日|[0-9]{4}[-/\.][0-9]{1,2}[-/\.][0-9]{1,2})", full_text_original)
+    # 顺便去除了日期中可能因为排版产生的多余空格
     pub_date = date_match.group(1).replace(" ", "") if date_match else "未找到颁布令日期"
     
     doc_no_match = re.search(r"文件编号[：:]?\s*([A-Za-z0-9\-\.]+)", full_text_original)
