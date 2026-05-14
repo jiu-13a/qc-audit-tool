@@ -330,27 +330,14 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
                             st.caption(f"⚠️ risk.csv 中无此代码，已默认按中风险计算。")
 
                         # 算天数
-                        q_base, e_base, s_base = calculate_logic(emp_count, q_level, e_level, s_level, df_calc)
-                        q_days = q_base if "QMS" in system_type else 0.0
-                        e_days = e_base if "EMS" in system_type else 0.0
-                        s_days = s_base if "OHSMS" in system_type else 0.0
-                        
-                        total = (q_d if "QMS" in system_type else 0) + (e_d if "EMS" in system_type else 0) + (s_d if "OHSMS" in system_type else 0)
-                    	# 1. 计算两种结果
-                        final_1 = total * 0.7 * 0.8 * 0.8
-                        final_2 = total * 0.7 * 0.8
-                    
-                        auditors = get_auditors(code, df_cat)
-                        st.write(f"**风险分级：** Q-{q_l} | E-{e_l} | S-{s_l}")
-                        st.write(f"**建议专家：** Q:{auditors.get('Q', '/')} | E:{auditors.get('E', '/')} | S:{auditors.get('S', '/')}")
-                    
-                        # 2. 并排展示两个公式的结果
-                        col_m1, col_m2 = st.columns(2)
-                        with col_m1:
-                             st.metric("(Q+E+S)×70%×80%×80%", f"{final_1:.2f} 天")
-                        with col_m2:
-                             st.metric("(Q+E+S)×70%×80%", f"{final_2:.2f} 天")
+						q_base, e_base, s_base = calculate_logic(emp_count, q_level, e_level, s_level, df_calc)
+						e_days = e_base if EMS in system_type else 0.0
+						q_days = q_base if QMS in system_type else 0.0
+						s_days = s_base if OHSMS in system_type else 0.0
 
+						total_base = q_days + e_days + s_days
+						final_days = total_base  0.7  0.8  0.8
+						
                         # 配老师
                         auditors = get_auditors(code, df_cat)
 
