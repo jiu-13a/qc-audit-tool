@@ -9,6 +9,7 @@ import easyocr
 import numpy as np
 from PIL import Image
 from datetime import datetime
+import time
 
 # ==========================================
 # 1. 基础配置与 API 初始化
