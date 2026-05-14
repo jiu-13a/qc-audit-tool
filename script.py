@@ -15,9 +15,19 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(page_title="启辰认证-智能评审系统", layout="wide", page_icon="🛡️")
 
-# 直接填入 API Key
-API_KEY = "sk-13b9b26ac39c4ed58b1e186037ed3fc1" 
+# DeepSeek 客户端初始化
+API_KEY = st.secrets["deepseek_key"] 
 client = OpenAI(api_key=API_KEY, base_url="https://api.deepseek.com")
+
+# 初始化 Session State
+if 'calc_done' not in st.session_state: st.session_state.calc_done = False
+if 'q' not in st.session_state: st.session_state.q = 0
+if 'e' not in st.session_state: st.session_state.e = 0
+if 's' not in st.session_state: st.session_state.s = 0
+if 'val1' not in st.session_state: st.session_state.val1 = 0.0
+if 'val2' not in st.session_state: st.session_state.val2 = 0.0
+if 'ai_ans' not in st.session_state: st.session_state.ai_ans = ""
+if 'candidate_codes' not in st.session_state: st.session_state.candidate_codes = []
 
 # ==========================================
 # 2. 核心辅助函数
