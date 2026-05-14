@@ -193,8 +193,7 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
     df_calc = smart_read_csv(CALC_FILE, header=1) 
     df_cat = smart_read_csv(CAT_FILE)
     df_exp = smart_read_csv(EXP_FILE)
-    if df_risk is not None:
-            df_risk = df_risk.map(lambda x: x.strip() if isinstance(x, str) else x)
+    df_risk = smart_read_csv("risk.csv")
 
     st.title("🛡️ 启辰认证-智能评审自动化系统")
 
