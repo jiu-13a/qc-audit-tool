@@ -423,8 +423,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
 	st.caption("系统将自动拆解表格提取人数/外包等关键信息，并与手册及执照比对。")
 
 	col_f1, col_f2, col_f3 = st.columns(3)
-	with col_f1: f_app = st.file_uploader("1. 申请书 (.docx/.doc)", type=["docx", "doc"], key="file_app")
-	with col_f2: f_manual = st.file_uploader("2. 管理手册 (.docx/.doc)", type=["docx", "doc"], key="file_man")
+	with col_f1: f_app = st.file_uploader("1. 申请书 (.docx)", type=["docx"], key="file_app")
+	with col_f2: f_manual = st.file_uploader("2. 管理手册 (.docx)", type=["docx"], key="file_man")
 	with col_f3: f_license = st.file_uploader("3. 营业执照 (.jpg/.png)", type=["jpg", "png", "jpeg"], key="file_lic")
 
 	if st.button("🔍 运行精准核查 (OCR+解析)"):
@@ -433,11 +433,8 @@ if all(os.path.exists(f) for f in [CODE_FILE, CALC_FILE, CAT_FILE, RISK_FILE]):
 		else:
 			try:
 				with st.spinner("正在穿透表格提取核心数据..."):
-					processed_app = handle_doc_file(f_app)
-					processed_manual = handle_doc_file(f_manual)
-
-					app_data = extract_app_fields(processed_app)
-					man_data = extract_manual_sections(processed_manual)
+					app_data = extract_app_fields(f_app)
+					man_data = extract_manual_sections(f_manual)
 
 					reader = load_ocr()
 					license_text = " ".join(reader.readtext(np.array(Image.open(f_license)), detail=0))
